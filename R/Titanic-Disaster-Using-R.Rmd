@@ -1,0 +1,146 @@
+FIAP - SHIFT - BIG DATA SCIENTIST
+========================================================
+EXERCÍCIO 1: Probabilidade sobrevivência do desastre do Titanic
+-----------------------------
+
+Neste exercício aplicaremos técnicas de Data Science tendo como objetivo estimar a chance de sobrevivência de um passageiro no desastre ocorrido com o Titanic, de acordo com as características disponíveis. O desafio está disponível no site de competição de Data Science Kaggle (https://www.kaggle.com/c/titanic)
+
+1. ORIGEM DOS DADOS
+-------------------
+Os dados para realização do estudo estão disponíveis no site da competição, nos seguintes links:
+https://www.kaggle.com/c/titanic/download/train.csv
+https://www.kaggle.com/c/titanic/download/test.csv
+
+No arquivo Train estão presentes todas as observações que serão úteis para formulação do modelo. Os dados do arquivo Test serão utilizados para preparar a previsão a ser submetida para a competição.
+
+2. CARGA DOS DADOS
+------------------
+
+Carregaremos no R dois datasets: o primeiro será o para os dados de treinamentos e o segundo, como será utilizado para estimação, chamaremos de Predict.
+
+```{r}
+# Utilize o read.csv para ler o csv.
+
+dsTRAIN = read.csv("../input/train.csv")
+dsPREDICT = read.csv("../input/test.csv")
+```
+
+Obs: Foi necessário realizar download prévio dos arquivos, pois eles estão em uma área segura (https) do site. Caso contrário, poderiamos referenciar diretamente a URL.
+
+4. LIMPEZA DOS DADOS
+---------------------------------
+
+Avaliaremos agora o conjunto de dados a fim de entender a qualidade dos mesmos: se estão completos, preenchidos, com valores adequados... Primeiro, conheceremos os dados, a partir de uma pequena amostra e obteremos uma breve descrição dos mesmos.
+
+```{r}
+head(dsTRAIN)
+summary(dsPREDICT)
+
+#A função NROW conta o número de linhas de um objeto.
+NROW(dsTRAIN)
+NROW(dsPREDICT)
+```
+
+Algumas observações em relação a esta primeira etapa:
+
+- PassengerId: é um identificador do passageiro, está preenchido;
+- Survived: será utilizado como variável dependente, o que queremos descobrir;
+- Pclass: está preenchido e nota-se uma diferença entre a média (mean) e mediana que nos diz que mais de 50% dos passageiros estavam na 3a. classe;
+- Name e sex: preenchidos;
+- Age: o campo NA's informa que há valores nulos, não preenchidos. Se desejarmos utilizar a idade como variável exógena (ou independente) será necessário fazer algum tratamento neste campo;
+- Parch e Ticket: decidi, neste estudo, não utilizar;
+- Fare: apesar de não existir nenhum NA, notamos que há um conjunto de observações com tarifa zerada. Caso decidamos utilizar esta informação, será necessário uma análise mais aprofundada a fim de verificar se devemos ou não fazer algum tratamento;
+- Cabin: decidi, neste estudo, não utilizar;
+- Embarked: 2 pessoas não tiveram a identificação do porto de origem. Caso desejemos utilizar esta informação, teremos de fazer algum tratamento.
+
+```{r}
+#Avaliando o número de passageiros sem a idade preenchida
+#A função na.omit retira os valores nulos, portanto, abaixo contaremos o número de passageiros com valores de Idade preenchido
+
+NROW(na.omit(dsTRAIN$Age))
+#Portanto, temos:
+
+NROW(dsTRAIN)-NROW(na.omit(dsTRAIN$Age))
+#passageiros sem idade preenchida.
+
+
+#Também é útil visualizar em formato de tabela (tal como fazemos no Excel, para fazer um "passeio" sobre os dados)
+#Utilizaremos para isto a função View. Como estamos analisando o campo Age, faremos um ordenamento por ele, utilizando para isto a função order()
+#Execute este comando no console do R: View(dsTRAIN[order(dsTRAIN$Age),] )
+```
+
+Preencheremos as idades vazios com média dos passageiros que possu??mos. As mesmas técnicas que estamos aplicando no conjunto de dados TEST serão aplicadas no conjunto PREDICT, tendo em vista que idade será uma variável exógena.
+
+```{r}
+#Primeiro calcularemos a média da variável idade, porém somente aplicar a função mean não funcionará:
+
+mean(dsTRAIN$Age)
+
+#A explicação é porque há valores nulos. Temos de calcular a média sem incluir os nulos das idades não preenchidas.
+#Utilizaremos para isto um filtro. Ele é aplicado no R no seguinte formato dataset[<<condição filtro>>, ]
+#Já sabemos que para consultar somente um campo, devemos utilizar $<<nome coluna>>, então ficará:
+
+#<<tire o comentario>>
+idadeMedia <- mean(dsTRAIN[is.na(dsTRAIN$Age)==0,]$Age)
+dsTRAIN[is.na(dsTRAIN$Age)==1,]$Age <- idadeMedia
+
+#Faremos o mesmo para o conjunto PREDICT
+
+dsPREDICT[is.na(dsPREDICT$Age)==1,]$Age <- idadeMedia
+```
+
+5. ANÁLISE EXPLORATÓRIA
+-------------------------------------
+
+Utilizaremos a análise de árvores de decisão para avaliação inicial.
+```{r}
+ library(party)
+ mcDT <- ctree(Survived ~ Sex, data=dsTRAIN)
+ plot(mcDT, type="simple")
+```
+
+Agora avaliaremos a árvore com todos dados.
+```{r}
+ mcDT <- ctree(Survived ~ Sex+Pclass+Age+SibSp+Parch+Fare+Cabin+Embarked ,data=dsTRAIN)
+ plot(mcDT, type="simple")
+```
+
+Tanto idade quanto tarifa parecem ser bons candidatos a agrupamentos. Passemos a análise de clusters.
+
+Observamos também que o t??tulo da pessoa (Mr., Miss., etc) poderia ser um indicador impl??cito de variável categórica. Tentemos criar esta nova variável e avaliar uma nova árvore de decisão.
+
+```{r}
+library(sqldf)
+d<-dsTRAIN
+dTitle<-as.factor(unlist(sqldf('select case when Name like "%Mr.%" then "Mr" when Name like "%Dr.%" then "Dr" when Name like "Rev.%" then "Rev" when Name like "%Master.%" then "Master" when Name like "%Miss.%" then "Miss" when Name like "%Mrs.%" then "Mrs" else "Other" end Title from d')))
+
+d$Title <- dTitle
+ mcDT2 <- ctree(Survived ~ Sex+Pclass+Age+Parch+Fare+Title, data=d)
+ plot(mcDT2, type="simple")
+```
+
+6. PREVISÃO DE DADOS
+-------------------------------------
+
+Vamos agora estimar (usando a função predict) do R. No nosso caso estimaremos probabilidades acima de 0.5 como sobrevivente.
+```{r}
+p<- dsPREDICT
+
+prev <- predict(mcDT, newdata=p, type = "response")
+p$Survived <- ifelse(prev>0.5,1,0) 
+
+head(p)
+
+count(p$Survived)
+```
+
+Basta escrever o arquivo e enviar para o Kaggle!
+(Obs: este modelo melhora o modelo anterior, onde somente mulheres sobreviviam, façam o teste)
+```{r}
+write.csv(p[,c("PassengerId", "Survived")], ,row.names=FALSE, file = "DC_Model.csv")
+
+
+# Usando Regreção linear
+ml <- lm(Survived ~ Age+Pclass+Fare+Sex, data=dsTRAIN)
+
+```
