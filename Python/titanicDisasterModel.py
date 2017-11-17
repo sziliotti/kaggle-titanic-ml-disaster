@@ -46,11 +46,10 @@ X_test[:,2:3] = imputer.transform(X_test[:,2:3])
 
 
 ##Feature Scaling (Standariza)
-#from sklearn.preprocessing import StandardScaler
-#sc_X = StandardScaler()
-#X_train = sc_X.fit_transform(X_train)
-#X_test = sc_X.transform(X_test)
-
+from sklearn.preprocessing import StandardScaler
+sc_X = StandardScaler()
+X_train = sc_X.fit_transform(X_train)
+X_test = sc_X.transform(X_test)
 
 
 
@@ -61,7 +60,34 @@ regressor = RandomForestRegressor(n_estimators = 100, random_state = 0) # n_esti
 regressor.fit(X_train, y_train)
 
 # Prevendo o novo resultado
-y_pred = regressor.predict(6.5)
+y_pred_RF = regressor.predict(X_test)
+index = 0
+for valor in y_pred_RF:
+    #print(index, y_pred_RF[index])
+    if y_pred_RF[index]>0.5:
+        y_pred_RF[index]= 1
+    else:
+        y_pred_RF[index]= 0
+    index+= 1
+
+y_pred_RF= y_pred_RF.astype('int')
+
+
+
+# Criando a matriz de confusão
+#from sklearn.metrics import confusion_matrix, accuracy_score
+#cm = confusion_matrix(y_test, y_pred_RF)
+#acc = accuracy_score(y_test, y_pred_RF)
+
+# Visualização do Random Forest Regression 
+#X_grid = np.arange(min(X), max(X), 0.01)
+#X_grid = X_grid.reshape((len(X_grid), 1))
+#plt.scatter(X, y, color = 'red')
+#plt.plot(X_grid, regressor.predict(X_grid), color = 'blue')
+#plt.title('Truth or Bluff (Random Forest Regression)')
+#plt.xlabel('Position level')
+#plt.ylabel('Salary')
+#plt.show()
 
 
 
@@ -71,28 +97,14 @@ classifier = KNeighborsClassifier(n_neighbors = 5, metric = 'minkowski', p = 2)
 classifier.fit(X_train, y_train)
 
 # Prevendo os resultados no dataset de Test.
-y_pred = classifier.predict(X_test)
-
-
-# Criando a matriz de confusão
-from sklearn.metrics import confusion_matrix, accuracy_score
-cm = confusion_matrix(y_test, y_pred)
-acc = accuracy_score(y_test, y_pred)
-
-
-# Visualização do Random Forest Regression 
-X_grid = np.arange(min(X), max(X), 0.01)
-X_grid = X_grid.reshape((len(X_grid), 1))
-plt.scatter(X, y, color = 'red')
-plt.plot(X_grid, regressor.predict(X_grid), color = 'blue')
-plt.title('Truth or Bluff (Random Forest Regression)')
-plt.xlabel('Position level')
-plt.ylabel('Salary')
-plt.show()
+y_pred_KNN = classifier.predict(X_test)
 
 
 
 
 
+# Criando arquivo de saida
+results_RF = pd.DataFrame({"PassengerId": datasetTEST["PassengerId"], "Survived": y_pred_RF}).to_csv("../results/results_rf.csv", index=None)
+results_KNN = pd.DataFrame({"PassengerId": datasetTEST["PassengerId"], "Survived": y_pred_KNN}).to_csv("../results/results_knn.csv", index=None)
 
-##### OUTRAS SOLUCOES
+
